@@ -1,0 +1,9 @@
+[submodule "wfp"]
+	path = wfp
+	url = https://github.com/BUnipendix/WwiseFilePackager
+[submodule "wwiser_utils"]
+	path = wwiser_utils
+	url = https://github.com/bnnm/wwiser-utils
+[submodule "data"]
+	path = data
+	url = https://github.com/Dimbreath/ZenlessData.git
