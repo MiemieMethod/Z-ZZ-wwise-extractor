@@ -118,6 +118,12 @@ def unpackWwiseBanks():
                     elegantWrite(f, file_data)
 
 
+def extractBankWem():
+    for i in ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]:
+        result = subprocess.run(['./quickbms', '-F', '*.bnk', '-o', './wwiser_utils/scripts/wwise_bnk_extractor.bms', f'./output/unpack/{i.lower()}', f'./output/unpack/{i.lower()}'],
+                            capture_output=True, text=True)
+        print(result.stdout)
+
 def generateBankData():
     result = subprocess.run(['python', 'wwiser.pyz', '-d', 'xml', '-dn', './output/unpack/banks', './output/unpack/**/*.bnk'],
                             capture_output=True, text=True)
@@ -135,15 +141,15 @@ def loadBankXml():
             bank_dict = bank_dict_old
             return
     data_dict = xmltodict.parse("<base>" + xml_string + "</base>")
+    hash_map = {}
+    for i in ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]:
+        hash_map[str(fnv_hash_32(i))] = i
     for bank in data_dict["base"]["root"]:
         bank_cont = parseXmlNode(bank)
-        hash_map = {}
-        for i in ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]:
-            hash_map[fnv_hash_32(i)] = i
         lang = bank_cont["BankHeader"]["AkBankHeader"]["dwLanguageID"]["@value"]
-        if lang not in bank_dict:
-            bank_dict[lang] = {}
-        bank_dict[lang][bank["@filename"]] = bank_cont
+        if hash_map[lang] not in bank_dict:
+            bank_dict[hash_map[lang]] = {}
+        bank_dict[hash_map[lang]][bank["@filename"]] = bank_cont
 
     with open("output/unpack/banks_temp.json", 'w') as f:
         bank_dict["hash"] = fnv_hash_64(xml_string)
@@ -233,6 +239,13 @@ def deleteCompletedFiles():
 
 
 def renameExtrenalWems():
+    text = ""
+    for root, dirs, files in os.walk(r"F:\StarRail\2.3\bank\externals"):
+        for file in files:
+            text += f"{file}\n".replace(".wem", "")
+    with open("output/unpack/externals.txt", "w", encoding="utf-8") as f:
+        f.write(text)
+
     if not os.path.exists(f"output/rename"):
         os.makedirs(f"output/rename")
 
@@ -310,7 +323,7 @@ def renameEventWems():
         if lang == "hash":
             continue
         for bank_name in bank_dict[lang]:
-            # print(f"[Event] {bank_name}")
+            print(f"[Event] {lang}: {bank_name}")
             bank = bank_dict[lang][bank_name]
 
             loaded_items_map = getLoadedItems(bank)
@@ -327,9 +340,9 @@ def renameEventWems():
                         action_item = loaded_items_map[action["ulActionID"]["@value"]]
                         if action_item["@name"] == "CAkActionPlay":
                             params = action_item["ActionInitialValues"]["PlayActionParams"]
-                            for sound_lang in bank_dict:
-                                if params["bankID"]["@value"] + ".bnk" in bank_dict[sound_lang]:
-                                    sound_bank = bank_dict[params["bankID"]["@value"] + ".bnk"]
+                            for sound_lang in (["SFX", lang] if lang != "SFX" else ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]):
+                                if sound_lang in bank_dict and params["bankID"]["@value"] + ".bnk" in bank_dict[sound_lang]:
+                                    sound_bank = bank_dict[sound_lang][params["bankID"]["@value"] + ".bnk"]
                                     sound_bank_loaded_items_map = getLoadedItems(sound_bank)
 
                                     musicSwitchCntrs = {}
@@ -344,16 +357,15 @@ def renameEventWems():
                                         sound_item = sound_bank_loaded_items_map[sound_id]
                                         if sound_item["@name"] == "CAkSound":
                                             source = sound_item["SoundInitialValues"]["AkBankSourceData"]
-                                            type = source["StreamType"]["@value"]
-                                            if type == "0":
-                                                name = sound_bank["@filename"][:-4]
-                                                file_ext = "bnk"
-                                                file_index = ""
-                                            else:
-                                                name = source["AkMediaInformation"]["sourceID"]["@value"]
-                                                file_ext = "wem"
-                                                file_index = f"{sound_item["@index"]}~"
-                                            file2rename = f"{normal_sound_path[14:]}/{name}"
+                                            source_sound_path = normal_sound_path
+                                            # type = source["StreamType"]["@value"]
+                                            name = source["AkMediaInformation"]["sourceID"]["@value"]
+                                            file_ext = "wem"
+                                            file_index = f"{sound_item["@index"]}~"
+                                            if source["AkMediaInformation"]["uSourceBits"]["bIsLanguageSpecific"][
+                                                "@value"] == "0":
+                                                source_sound_path = normal_sound_path.replace(f"{lang.lower()}", "sfx")
+                                            file2rename = f"{source_sound_path[14:]}/{name}"
                                             file_destination = f"{normal_sound_path[14:]}/{event_name}/{file_index}{name}"
                                             if not os.path.exists(
                                                     f"output/rename/{normal_sound_path[14:]}/{event_name}"):
@@ -416,20 +428,22 @@ def renameEventWems():
 if __name__ == '__main__':
     print("[Main] Start!")
     print("[Main] Start unpacking Wwise banks...")
-    # unpackWwiseBanks()
-    print("[Main] Start outputting wwnames...")
-    # outputWwnames()
+    unpackWwiseBanks()
+    print("[Main] Start extracting bank wems...")
+    extractBankWem()
     # if you just want to unpack but not rename, comment all lines below
+    print("[Main] Start outputting wwnames...")
+    outputWwnames()
     print("[Main] Start generating bank data...")
-    # generateBankData()
+    generateBankData()
     print("[Main] Start loading bank xml...")
     loadBankXml()
-    print("[Main] Start renaming external wems...")
+    # print("[Main] Start renaming external wems...")
     # renameExtrenalWems()
     print("[Main] Start renaming event wems...")
     renameEventWems()
     print("[Main] Start deleting completed files...")
     # this program will delete the files in the `output/unpack` folder which are successfully renamed.
     # if you want to keep them, comment the line below.
-    # deleteCompletedFiles()
+    deleteCompletedFiles()
     print("[Main] Done!")
