@@ -312,6 +312,18 @@ def renameEventWems():
             elif "pNodes" in node:
                 findAudioNode(node["pNodes"], audioNodeIdToName)
 
+    def findSwitchNode(nodes, switchNodeIdToName):
+        for node in nodes:
+            if int(node["ulNumItems"]["@value"]) > 0:
+                if int(node["ulNumItems"]["@value"]) == 1:
+                    switchNodeIdToName[node["NodeList"]["NodeID"]["@value"]] = node["ulSwitchID"].get("@hashname",
+                                                                                                    node["ulSwitchID"][
+                                                                                                        "@value"])
+                else:
+                    for item in node["NodeList"]["NodeID"]:
+                        switchNodeIdToName[item["@value"]] = node["ulSwitchID"].get("@hashname",
+                                                                                   node["ulSwitchID"]["@value"])
+
     def getChilds(node, result):
         if "ulNumChilds" in node:
             if int(node["ulNumChilds"]["@value"]) > 0:
@@ -344,6 +356,72 @@ def renameEventWems():
                 subpath += f"/{source["AkMediaInformation"]["sourceID"]["@value"]}"
                 result[source["AkMediaInformation"]["sourceID"]["@value"]] = subpath
 
+    def findSound(sound_id, loaded_items, normal_sound_path, lang, path, results):
+        def renameSource(source, index, source_index):
+            source_sound_path = normal_sound_path
+            if source["AkMediaInformation"]["uSourceBits"]["bIsLanguageSpecific"]["@value"] == "0":
+                source_sound_path = normal_sound_path.replace(f"{lang.lower()}", "sfx")
+            name = source["AkMediaInformation"]["sourceID"]["@value"]
+            file2rename = f"{source_sound_path[14:]}/{name}"
+            file_destination = f"{normal_sound_path[14:]}/{path}/{index}{'~' if source_index else ''}{source_index}~{name}"
+            if not os.path.exists(f"output/rename/{normal_sound_path[14:]}/{path}"):
+                os.makedirs(f"output/rename/{normal_sound_path[14:]}/{path}")
+            results.append((file2rename, file_destination))
+
+        if sound_id in loaded_items:
+            name = loaded_items[sound_id]["@name"]
+
+            if name == "CAkSwitchCntr":
+                node_id2name = {}
+                findSwitchNode(loaded_items[sound_id]["SwitchCntrInitialValues"]["SwitchList"], node_id2name)
+                for child in node_id2name:
+                    subpath = path
+                    subpath += f"/{node_id2name[child]}"
+                    findSound(child, loaded_items, normal_sound_path, lang, subpath, results)
+
+            if name == "CAkRanSeqCntr":
+                childs = []
+                getChilds(loaded_items[sound_id]["RanSeqCntrInitialValues"]["Children"], childs)
+                for child in childs:
+                    findSound(child, loaded_items, normal_sound_path, lang, path, results)
+
+            if name == "CAkLayerCntr":
+                childs = []
+                getChilds(loaded_items[sound_id]["LayerCntrInitialValues"]["Children"], childs)
+                for child in childs:
+                    findSound(child, loaded_items, normal_sound_path, lang, path, results)
+
+            if name == "CAkSound":
+                source = loaded_items[sound_id]["SoundInitialValues"]["AkBankSourceData"]
+                renameSource(source, loaded_items[sound_id]["@index"], "")
+
+            if name == "CAkMusicSwitchCntr":
+                node_id2name = {}
+                findAudioNode(loaded_items[sound_id]["MusicSwitchCntrInitialValues"]["AkDecisionTree"]["pNodes"],
+                              node_id2name)
+                for child in node_id2name:
+                    subpath = path
+                    subpath += f"/{node_id2name[child]}"
+                    findSound(child, loaded_items, normal_sound_path, lang, subpath, results)
+
+            if name == "CAkMusicRanSeqCntr":
+                childs = []
+                getChilds(
+                    loaded_items[sound_id]["MusicRanSeqCntrInitialValues"]["MusicTransNodeParams"]["MusicNodeParams"][
+                        "Children"], childs)
+                for child in childs:
+                    findSound(child, loaded_items, normal_sound_path, lang, path, results)
+
+            if name == "CAkMusicSegment":
+                childs = []
+                getChilds(loaded_items[sound_id]["MusicSegmentInitialValues"]["MusicNodeParams"]["Children"], childs)
+                for child in childs:
+                    findSound(child, loaded_items, normal_sound_path, lang, path, results)
+
+            if name == "CAkMusicTrack":
+                for source in loaded_items[sound_id]["MusicTrackInitialValues"]["pSource"]:
+                    renameSource(source, loaded_items[sound_id]["@index"], source["@index"])
+
     if not os.path.exists(f"output/rename"):
         os.makedirs(f"output/rename")
 
@@ -352,6 +430,8 @@ def renameEventWems():
         for file in files:
             if file.endswith(".wem"):
                 valid_wems.append(file.replace(".wem", ""))
+
+    init_item_names = set()
 
     for lang in bank_dict:
         if lang == "hash":
@@ -374,6 +454,7 @@ def renameEventWems():
                         action_item = loaded_items_map[action["ulActionID"]["@value"]]
                         if action_item["@name"] == "CAkActionPlay":
                             params = action_item["ActionInitialValues"]["PlayActionParams"]
+                            id_ext = action_item["ActionInitialValues"]["idExt"]["@value"]
                             for sound_lang in (
                                     ["SFX", lang] if lang != "SFX" else ["SFX", "Chinese(PRC)", "English(EN)",
                                                                          "Japanese(JP)", "Korean(KR)"]):
@@ -382,75 +463,16 @@ def renameEventWems():
                                     sound_bank = bank_dict[sound_lang][params["bankID"]["@value"] + ".bnk"]
                                     sound_bank_loaded_items_map = getLoadedItems(sound_bank)
 
-                                    musicSwitchCntrs = {}
-                                    musicRanSeqCntrs = {}
-                                    musicSegments = {}
-                                    musicTracks = {}
-
                                     sound_processed = False
 
                                     normal_sound_path = sound_bank["@path"].replace("\\", "/").replace("./", "")
-                                    for sound_id in sound_bank_loaded_items_map:
-                                        sound_item = sound_bank_loaded_items_map[sound_id]
-                                        if sound_item["@name"] == "CAkSound":
-                                            source = sound_item["SoundInitialValues"]["AkBankSourceData"]
-                                            source_sound_path = normal_sound_path
-                                            # type = source["StreamType"]["@value"]
-                                            name = source["AkMediaInformation"]["sourceID"]["@value"]
-                                            file_ext = "wem"
-                                            file_index = f"{sound_item["@index"]}~"
-                                            if source["AkMediaInformation"]["uSourceBits"]["bIsLanguageSpecific"][
-                                                    "@value"] == "0":
-                                                source_sound_path = normal_sound_path.replace(f"{lang.lower()}", "sfx")
-                                            file2rename = f"{source_sound_path[14:]}/{name}"
-                                            file_destination = f"{normal_sound_path[14:]}/{event_name}/{file_index}{name}"
-                                            if not os.path.exists(
-                                                    f"output/rename/{normal_sound_path[14:]}/{event_name}"):
-                                                os.makedirs(f"output/rename/{normal_sound_path[14:]}/{event_name}")
-                                            if name not in valid_wems:
-                                                # old_file_name = f"output/unpack/{file2rename}.wem"
-                                                # new_file_name = f"output/rename/{file_destination}.wem"
-                                                # print(f"[Event] {old_file_name} -> {new_file_name} not found!")
-                                                continue
-                                            elegantRename(file2rename, file_destination, file_ext, "Event")
-                                            sound_processed = True
 
-                                        if sound_item["@name"] == "CAkMusicSwitchCntr":
-                                            node_id2name = {}
-                                            findAudioNode(
-                                                sound_item["MusicSwitchCntrInitialValues"]["AkDecisionTree"]["pNodes"],
-                                                node_id2name)
-                                            musicSwitchCntrs[sound_item["ulID"]["@value"]] = node_id2name
-                                            sound_processed = True
-                                        if sound_item["@name"] == "CAkMusicRanSeqCntr":
-                                            musicRanSeqCntrs[sound_item["ulID"]["@value"]] =  \
-                                                sound_item["MusicRanSeqCntrInitialValues"]["MusicTransNodeParams"][
-                                                    "MusicNodeParams"]["Children"]
-                                        if sound_item["@name"] == "CAkMusicSegment":
-                                            musicSegments[sound_item["ulID"]["@value"]] = \
-                                                sound_item["MusicSegmentInitialValues"]["MusicNodeParams"]["Children"]
-                                        if sound_item["@name"] == "CAkMusicTrack":
-                                            musicTracks[sound_item["ulID"]["@value"]] = \
-                                                sound_item["MusicTrackInitialValues"]["pSource"]
-
-                                    if action_item["ActionInitialValues"]["idExt"][
-                                            "@value"] in sound_bank_loaded_items_map:
-                                        initial_item = sound_bank_loaded_items_map[
-                                            action_item["ActionInitialValues"]["idExt"]["@value"]]
-                                        if initial_item["@name"] == "CAkMusicSwitchCntr":
-                                            path = f"{normal_sound_path[14:]}/{event_name}"
-                                            filehash2filepath = {}
-                                            findMusicSound(initial_item["ulID"]["@value"], musicSegments, musicTracks,
-                                                           musicRanSeqCntrs, musicSwitchCntrs, path, filehash2filepath)
-                                            for filehash in filehash2filepath:
-                                                file2rename = f"{normal_sound_path[14:]}/{filehash}"
-                                                file_destination = filehash2filepath[filehash]
-                                                if not os.path.exists(
-                                                        "output/rename/" + file_destination.replace(f"/{filehash}",
-                                                                                                    "")):
-                                                    os.makedirs(
-                                                        "output/rename/" + file_destination.replace(f"/{filehash}", ""))
-                                                elegantRename(file2rename, file_destination, "wem", "Event")
+                                    if id_ext in sound_bank_loaded_items_map:
+                                        rename_list = []
+                                        findSound(id_ext, sound_bank_loaded_items_map, normal_sound_path, lang, event_name, rename_list)
+                                        for pair in rename_list:
+                                            elegantRename(pair[0], pair[1], "wem", "Event")
+                                        sound_processed = True
 
                                     if sound_processed and f"{normal_sound_path}/{sound_bank["@filename"]}" not in completed_files:
                                         completed_files.append(f"{normal_sound_path}/{sound_bank["@filename"]}")
@@ -463,20 +485,23 @@ def renameEventWems():
 
     global skip_num
     print(f"[Event] skipped {skip_num} files because of unfound hash.")
+    print(init_item_names)
     skip_num = 0
+
+
 
 
 if __name__ == '__main__':
     print("[Main] Start!")
     print("[Main] Start unpacking Wwise banks...")
-    unpackWwiseBanks()
+    # unpackWwiseBanks()
     print("[Main] Start extracting bank wems...")
-    extractBankWem()
+    # extractBankWem()
     # if you just want to unpack but not rename, comment all lines below
     print("[Main] Start outputting wwnames...")
-    outputWwnames()
+    # outputWwnames()
     print("[Main] Start generating bank data...")
-    generateBankData()
+    # generateBankData()
     print("[Main] Start loading bank xml...")
     loadBankXml()
     print("[Main] Start renaming external wems...")
@@ -486,5 +511,5 @@ if __name__ == '__main__':
     print("[Main] Start deleting completed files...")
     # this program will delete the files in the `output/unpack` folder which are successfully renamed.
     # if you want to keep them, comment the line below.
-    deleteCompletedFiles()
+    # deleteCompletedFiles()
     print("[Main] Done!")
