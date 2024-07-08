@@ -283,7 +283,7 @@ def renameExtrenalWems():
             for key in data["externals"]:
                 entry = data["externals"][key]
                 for j in ["wem", "ogg", "wav", "mp3"]:
-                    path = f"{i}/{entry['prefix'].replace("/", "_")}{key}"
+                    path = f"{i}/{entry['prefix'].replace('/', '_')}{key}"
                     hash = fnv_hash_64(f"{path}.{j}")
                     elegantRename(f"sfx/externals/{hash}", path, j)
                 # hash = fnv_hash_64(f"{entry['prefix']}{key}_{i}.wem")
