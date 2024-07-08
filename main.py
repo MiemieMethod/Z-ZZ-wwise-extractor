@@ -16,6 +16,7 @@ def fnv_hash_64(data: str):
         hash_num = ((hash_num * 1099511628211) & 0xffffffffffffffff) ^ i
     return hash_num
 
+
 def addJsonString(json_data, results=[]):
     if isinstance(json_data, dict):
         for key in json_data:
@@ -34,6 +35,7 @@ def addJsonString(json_data, results=[]):
                 if item not in results:
                     results.append(item)
 
+
 def outputWwnames():
     result = ""
 
@@ -41,18 +43,41 @@ def outputWwnames():
     for key in ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]:
         result += f"{key}\n"
 
-    result += "\n### BRUTE FORCE NAMES\n"
-    results = []
-    for root, dirs, files in os.walk("data"):
-        for file in files:
-            if file.endswith(".json"):
-                with open(os.path.join(root, file), "r", encoding="utf-8") as f:
-                    if file.startswith("TextMap"):
-                        continue
-                    print(f"[Main] Name fetch: Reading {os.path.join(root, file)}")
-                    data = json.load(f)
-                    addJsonString(data, results)
-    result += "\n".join(results)
+    # result += "\n### BRUTE FORCE NAMES\n"
+    # results = []
+    # for root, dirs, files in os.walk("data"):
+    #     for file in files:
+    #         if file.endswith(".json"):
+    #             with open(os.path.join(root, file), "r", encoding="utf-8") as f:
+    #                 if file.startswith("TextMap"):
+    #                     continue
+    #                 print(f"[Main] Name fetch: Reading {os.path.join(root, file)}")
+    #                 data = json.load(f)
+    #                 addJsonString(data, results)
+    # result += "\n".join(results)
+
+    with open("brute_force_names.txt", "r", encoding="utf-8") as f:
+        result += f.read()
+
+    with open("asset_names.txt", "r", encoding="utf-8") as f:
+        result += f.read()
+
+    result += "\n### AVATAR NAMES\n"
+
+    reaplce_names = []
+    with open("data/FileCfg/AvatarBaseTemplateTb.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+        avatars = data["GMNCBMLIHPE"]
+        for avatar in avatars:
+            reaplce_names.append(avatar["KPAMJPAHELG"])
+
+    placeholders = []
+    for line in result.split("\n"):
+        if line.find("{}") != -1:
+            placeholders.append(line)
+    for line in placeholders:
+        for name in reaplce_names:
+            result += line.format(name) + "\n"
 
     with open("output/unpack/wwnames.txt", "w", encoding="utf-8") as f:
         f.write(result)
@@ -120,13 +145,16 @@ def unpackWwiseBanks():
 
 def extractBankWem():
     for i in ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]:
-        result = subprocess.run(['./quickbms', '-F', '*.bnk', '-o', './wwiser_utils/scripts/wwise_bnk_extractor.bms', f'./output/unpack/{i.lower()}', f'./output/unpack/{i.lower()}'],
-                            capture_output=True, text=True)
+        result = subprocess.run(['./quickbms', '-F', '*.bnk', '-o', './wwiser_utils/scripts/wwise_bnk_extractor.bms',
+                                 f'./output/unpack/{i.lower()}', f'./output/unpack/{i.lower()}'],
+                                capture_output=True, text=True)
         print(result.stdout)
 
+
 def generateBankData():
-    result = subprocess.run(['python', 'wwiser.pyz', '-d', 'xml', '-dn', './output/unpack/banks', './output/unpack/**/*.bnk'],
-                            capture_output=True, text=True)
+    result = subprocess.run(
+        ['python', 'wwiser.pyz', '-d', 'xml', '-dn', './output/unpack/banks', './output/unpack/**/*.bnk'],
+        capture_output=True, text=True)
     print(result.stdout)
 
 
@@ -240,7 +268,7 @@ def deleteCompletedFiles():
 
 def renameExtrenalWems():
     text = ""
-    for root, dirs, files in os.walk(r"F:\StarRail\2.3\bank\externals"):
+    for root, dirs, files in os.walk(r"output/unpack/sfx/externals"):
         for file in files:
             text += f"{file}\n".replace(".wem", "")
     with open("output/unpack/externals.txt", "w", encoding="utf-8") as f:
@@ -249,17 +277,17 @@ def renameExtrenalWems():
     if not os.path.exists(f"output/rename"):
         os.makedirs(f"output/rename")
 
-    for i in ["Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)", "Cn", "En", "Jp", "Kr"]:
+    for i in ["Chinese(PRC)", "Chinese", "Cn"]:
         with open("data/Data/AudioResourceData.json", "r", encoding="utf-8") as f:
             data = json.load(f)
             for key in data["externals"]:
                 entry = data["externals"][key]
                 for j in ["wem", "ogg", "wav", "mp3"]:
-                    path = f"{entry["prefix"]}{i}/{key}"
+                    path = f"{i}/{entry['prefix'].replace("/", "_")}{key}"
                     hash = fnv_hash_64(f"{path}.{j}")
-                    elegantRename(f"sfx/externals/{hash}", path)
-                # hash = fnv_hash_64(f"{entry["prefix"]}{key}_{i}.wem")
-                # elegantRename(f"sfx/externals/{hash}", f"{i.lower()}/voice/{entry["prefix"]}{key}")
+                    elegantRename(f"sfx/externals/{hash}", path, j)
+                # hash = fnv_hash_64(f"{entry['prefix']}{key}_{i}.wem")
+                # elegantRename(f"sfx/externals/{hash}", f"{i.lower()}/voice/{entry['prefix']}{key}")
 
     global skip_num
     print(f"[External] skipped {skip_num} files because of unfound hash.")
@@ -319,6 +347,12 @@ def renameEventWems():
     if not os.path.exists(f"output/rename"):
         os.makedirs(f"output/rename")
 
+    valid_wems = []
+    for root, dirs, files in os.walk("output/unpack"):
+        for file in files:
+            if file.endswith(".wem"):
+                valid_wems.append(file.replace(".wem", ""))
+
     for lang in bank_dict:
         if lang == "hash":
             continue
@@ -340,8 +374,11 @@ def renameEventWems():
                         action_item = loaded_items_map[action["ulActionID"]["@value"]]
                         if action_item["@name"] == "CAkActionPlay":
                             params = action_item["ActionInitialValues"]["PlayActionParams"]
-                            for sound_lang in (["SFX", lang] if lang != "SFX" else ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]):
-                                if sound_lang in bank_dict and params["bankID"]["@value"] + ".bnk" in bank_dict[sound_lang]:
+                            for sound_lang in (
+                                    ["SFX", lang] if lang != "SFX" else ["SFX", "Chinese(PRC)", "English(EN)",
+                                                                         "Japanese(JP)", "Korean(KR)"]):
+                                if sound_lang in bank_dict and params["bankID"]["@value"] + ".bnk" in bank_dict[
+                                        sound_lang]:
                                     sound_bank = bank_dict[sound_lang][params["bankID"]["@value"] + ".bnk"]
                                     sound_bank_loaded_items_map = getLoadedItems(sound_bank)
 
@@ -363,13 +400,18 @@ def renameEventWems():
                                             file_ext = "wem"
                                             file_index = f"{sound_item["@index"]}~"
                                             if source["AkMediaInformation"]["uSourceBits"]["bIsLanguageSpecific"][
-                                                "@value"] == "0":
+                                                    "@value"] == "0":
                                                 source_sound_path = normal_sound_path.replace(f"{lang.lower()}", "sfx")
                                             file2rename = f"{source_sound_path[14:]}/{name}"
                                             file_destination = f"{normal_sound_path[14:]}/{event_name}/{file_index}{name}"
                                             if not os.path.exists(
                                                     f"output/rename/{normal_sound_path[14:]}/{event_name}"):
                                                 os.makedirs(f"output/rename/{normal_sound_path[14:]}/{event_name}")
+                                            if name not in valid_wems:
+                                                # old_file_name = f"output/unpack/{file2rename}.wem"
+                                                # new_file_name = f"output/rename/{file_destination}.wem"
+                                                # print(f"[Event] {old_file_name} -> {new_file_name} not found!")
+                                                continue
                                             elegantRename(file2rename, file_destination, file_ext, "Event")
                                             sound_processed = True
 
@@ -381,20 +423,18 @@ def renameEventWems():
                                             musicSwitchCntrs[sound_item["ulID"]["@value"]] = node_id2name
                                             sound_processed = True
                                         if sound_item["@name"] == "CAkMusicRanSeqCntr":
-                                            musicRanSeqCntrs[sound_item["ulID"]["@value"]] = \
+                                            musicRanSeqCntrs[sound_item["ulID"]["@value"]] =  \
                                                 sound_item["MusicRanSeqCntrInitialValues"]["MusicTransNodeParams"][
-                                                    "MusicNodeParams"][
-                                                    "Children"]
+                                                    "MusicNodeParams"]["Children"]
                                         if sound_item["@name"] == "CAkMusicSegment":
                                             musicSegments[sound_item["ulID"]["@value"]] = \
                                                 sound_item["MusicSegmentInitialValues"]["MusicNodeParams"]["Children"]
                                         if sound_item["@name"] == "CAkMusicTrack":
                                             musicTracks[sound_item["ulID"]["@value"]] = \
-                                            sound_item["MusicTrackInitialValues"][
-                                                "pSource"]
+                                                sound_item["MusicTrackInitialValues"]["pSource"]
 
                                     if action_item["ActionInitialValues"]["idExt"][
-                                        "@value"] in sound_bank_loaded_items_map:
+                                            "@value"] in sound_bank_loaded_items_map:
                                         initial_item = sound_bank_loaded_items_map[
                                             action_item["ActionInitialValues"]["idExt"]["@value"]]
                                         if initial_item["@name"] == "CAkMusicSwitchCntr":
@@ -425,6 +465,7 @@ def renameEventWems():
     print(f"[Event] skipped {skip_num} files because of unfound hash.")
     skip_num = 0
 
+
 if __name__ == '__main__':
     print("[Main] Start!")
     print("[Main] Start unpacking Wwise banks...")
@@ -438,7 +479,7 @@ if __name__ == '__main__':
     generateBankData()
     print("[Main] Start loading bank xml...")
     loadBankXml()
-    # print("[Main] Start renaming external wems...")
+    print("[Main] Start renaming external wems...")
     # renameExtrenalWems()
     print("[Main] Start renaming event wems...")
     renameEventWems()
