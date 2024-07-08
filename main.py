@@ -73,7 +73,7 @@ def outputWwnames():
 
     placeholders = []
     for line in result.split("\n"):
-        if line.find("{}") != -1:
+        if line.find("_{}") != -1:
             placeholders.append(line)
     for line in placeholders:
         for name in reaplce_names:
@@ -494,22 +494,22 @@ def renameEventWems():
 if __name__ == '__main__':
     print("[Main] Start!")
     print("[Main] Start unpacking Wwise banks...")
-    unpackWwiseBanks()
+    # unpackWwiseBanks()
     print("[Main] Start extracting bank wems...")
-    extractBankWem()
+    # extractBankWem()
     # if you just want to unpack but not rename, comment all lines below
     print("[Main] Start outputting wwnames...")
     outputWwnames()
     print("[Main] Start generating bank data...")
-    generateBankData()
+    # generateBankData()
     print("[Main] Start loading bank xml...")
-    loadBankXml()
+    # loadBankXml()
     print("[Main] Start renaming external wems...")
     # renameExtrenalWems()
     print("[Main] Start renaming event wems...")
-    renameEventWems()
+    # renameEventWems()
     print("[Main] Start deleting completed files...")
     # this program will delete the files in the `output/unpack` folder which are successfully renamed.
     # if you want to keep them, comment the line below.
-    deleteCompletedFiles()
+    # deleteCompletedFiles()
     print("[Main] Done!")
