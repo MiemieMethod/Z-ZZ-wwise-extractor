@@ -2,6 +2,7 @@ import json
 import xmltodict
 import subprocess
 import shutil
+import re
 
 from wfp.FilePackager import *
 
@@ -56,11 +57,17 @@ def outputWwnames():
     #                 addJsonString(data, results)
     # result += "\n".join(results)
 
+    # with open("output/unpack/or_wwnames.txt", "r", encoding="utf-8", errors="ignore") as f:
+    #     result += f.read()
+
+    temp_result = ""
     with open("brute_force_names.txt", "r", encoding="utf-8") as f:
-        result += f.read()
+        temp_result += f.read()
 
     with open("asset_names.txt", "r", encoding="utf-8") as f:
-        result += f.read()
+        temp_result += f.read()
+
+    result += temp_result
 
     result += "\n### AVATAR NAMES\n"
 
@@ -72,7 +79,7 @@ def outputWwnames():
             reaplce_names.append(avatar["KPAMJPAHELG"])
 
     placeholders = []
-    for line in result.split("\n"):
+    for line in temp_result.split("\n"):
         if line.find("_{}") != -1:
             placeholders.append(line)
     for line in placeholders:
@@ -145,7 +152,7 @@ def unpackWwiseBanks():
 
 def extractBankWem():
     for i in ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]:
-        result = subprocess.run(['./quickbms', '-F', '*.bnk', '-o', './wwiser_utils/scripts/wwise_bnk_extractor.bms',
+        result = subprocess.run(['./quickbms', '-F', '*.bnk', '-s', './wwiser_utils/scripts/wwise_bnk_extractor.bms',
                                  f'./output/unpack/{i.lower()}', f'./output/unpack/{i.lower()}'],
                                 capture_output=True, text=True)
         print(result.stdout)
@@ -165,8 +172,8 @@ def loadBankXml():
     if os.path.exists("output/unpack/banks_temp.json"):
         with open("output/unpack/banks_temp.json", 'r') as f:
             bank_dict_old = json.load(f)
-            # if bank_dict_old["hash"] == fnv_hash_64(xml_string):
-            bank_dict = bank_dict_old
+            if bank_dict_old["hash"] == fnv_hash_64(xml_string):
+                bank_dict = bank_dict_old
             return
     data_dict = xmltodict.parse("<base>" + xml_string + "</base>")
     hash_map = {}
@@ -283,7 +290,7 @@ def renameExtrenalWems():
             for key in data["externals"]:
                 entry = data["externals"][key]
                 for j in ["wem", "ogg", "wav", "mp3"]:
-                    path = f"{i}/{entry['prefix'].replace('/', '_')}{key}"
+                    path = f"{i}/stream_NAP/{entry['prefix']}{key}"
                     hash = fnv_hash_64(f"{path}.{j}")
                     elegantRename(f"sfx/externals/{hash}", path, j)
                 # hash = fnv_hash_64(f"{entry['prefix']}{key}_{i}.wem")
@@ -293,6 +300,7 @@ def renameExtrenalWems():
     print(f"[External] skipped {skip_num} files because of unfound hash.")
     skip_num = 0
 
+bgm_paths = []
 
 def renameEventWems():
     def getLoadedItems(bank):
@@ -303,14 +311,12 @@ def renameEventWems():
             loaded_items_map[item.get("ulID", item.get("ulStateID", ""))["@value"]] = item
         return loaded_items_map
 
-    def findAudioNode(nodes, audioNodeIdToName):
+    def findAudioNode(nodes, audioNodeIdToName, path = ""):
         for node in nodes:
             if "audioNodeId" in node:
-                if node["key"]["@value"] != "0":
-                    audioNodeIdToName[node["audioNodeId"]["@value"]] = node["key"].get("@hashname",
-                                                                                       node["key"]["@value"])
+                audioNodeIdToName[node["audioNodeId"]["@value"]] = path + node["key"].get("@hashname", node["key"]["@value"])
             elif "pNodes" in node:
-                findAudioNode(node["pNodes"], audioNodeIdToName)
+                findAudioNode(node["pNodes"], audioNodeIdToName, path + node["key"].get("@hashname", node["key"]["@value"]) + "/")
 
     def findSwitchNode(nodes, switchNodeIdToName):
         for node in nodes:
