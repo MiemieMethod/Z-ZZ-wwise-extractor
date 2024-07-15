@@ -261,7 +261,7 @@ def elegantRename(hash_path, voice_path, ext="wem", log_area="External"):
         os.remove(new_file_name)
     global completed_files
     if os.path.exists(old_file_name):
-        shutil.copy(old_file_name, new_file_name)
+        shutil.copy2(old_file_name, new_file_name)
         if old_file_name not in completed_files:
             completed_files.append(old_file_name)
     else:
