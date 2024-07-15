@@ -1,4 +1,6 @@
 import json
+import os
+
 import xmltodict
 import subprocess
 import shutil
@@ -69,7 +71,7 @@ def outputWwnames():
 
     result += temp_result
 
-    result += "\n### AVATAR NAMES\n"
+    result += "\n### AVATAR / MONSTER NAMES\n"
 
     reaplce_names = []
     with open("data/FileCfg/AvatarBaseTemplateTb.json", "r", encoding="utf-8") as f:
@@ -77,6 +79,12 @@ def outputWwnames():
         avatars = data["GMNCBMLIHPE"]
         for avatar in avatars:
             reaplce_names.append(avatar["KPAMJPAHELG"])
+    with open("data/FileCfg/MonsterConfigTemplateTb.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+        avatars = data["GMNCBMLIHPE"]
+        for avatar in avatars:
+            reaplce_names.append(avatar["KPAMJPAHELG"])
+    reaplce_names.extend(["avatara", "avatarb", "avatarc", "avatard", "avatare", "avatarf"])
 
     placeholders = []
     for line in temp_result.split("\n"):
@@ -106,11 +114,11 @@ def unpackWwiseBanks():
 
     package.addfile(open(f'input/Min/Minimum.pck', 'rb'))
     package.addfile(open(f'input/Full/Patch.pck', 'rb'))
-    for i in range(0, 15):
+    for i in range(0, 16):
         package.addfile(open(f'input/Full/SoundBank_SFX_{i}.pck', 'rb'))
     # for i in range(0, 32):
     #     package.addfile(open(f'input/Music{i}.pck', 'rb'))
-    for i in range(0, 15):
+    for i in range(0, 16):
         package.addfile(open(f'input/Full/Streamed_SFX_{i}.pck', 'rb'))
     # for i in range(0, 32):
     #     package.addfile(open(f'input/SFX/External{i}.pck', 'rb'))
@@ -152,7 +160,7 @@ def unpackWwiseBanks():
 
 def extractBankWem():
     for i in ["SFX", "Chinese(PRC)", "English(EN)", "Japanese(JP)", "Korean(KR)"]:
-        result = subprocess.run(['./quickbms', '-F', '*.bnk', '-s', './wwiser_utils/scripts/wwise_bnk_extractor.bms',
+        result = subprocess.run(['./quickbms', '-F', '*.bnk', '-k', './wwiser_utils/scripts/wwise_bnk_extractor.bms',
                                  f'./output/unpack/{i.lower()}', f'./output/unpack/{i.lower()}'],
                                 capture_output=True, text=True)
         print(result.stdout)
@@ -172,8 +180,9 @@ def loadBankXml():
     if os.path.exists("output/unpack/banks_temp.json"):
         with open("output/unpack/banks_temp.json", 'r') as f:
             bank_dict_old = json.load(f)
-            if bank_dict_old["hash"] == fnv_hash_64(xml_string):
-                bank_dict = bank_dict_old
+            # if bank_dict_old["hash"] == fnv_hash_64(xml_string):
+            print("[Main] Bank data loaded from cache. If you want to reload, delete the `banks_temp.json` file.")
+            bank_dict = bank_dict_old
             return
     data_dict = xmltodict.parse("<base>" + xml_string + "</base>")
     hash_map = {}
@@ -187,7 +196,7 @@ def loadBankXml():
         bank_dict[hash_map[lang]][bank["@filename"]] = bank_cont
 
     with open("output/unpack/banks_temp.json", 'w') as f:
-        bank_dict["hash"] = fnv_hash_64(xml_string)
+        # bank_dict["hash"] = fnv_hash_64(xml_string)
         json.dump(bank_dict, f, indent=4)
 
 
@@ -299,8 +308,6 @@ def renameExtrenalWems():
     global skip_num
     print(f"[External] skipped {skip_num} files because of unfound hash.")
     skip_num = 0
-
-bgm_paths = []
 
 def renameEventWems():
     def getLoadedItems(bank):
@@ -431,14 +438,6 @@ def renameEventWems():
     if not os.path.exists(f"output/rename"):
         os.makedirs(f"output/rename")
 
-    valid_wems = []
-    for root, dirs, files in os.walk("output/unpack"):
-        for file in files:
-            if file.endswith(".wem"):
-                valid_wems.append(file.replace(".wem", ""))
-
-    init_item_names = set()
-
     for lang in bank_dict:
         if lang == "hash":
             continue
@@ -491,8 +490,18 @@ def renameEventWems():
 
     global skip_num
     print(f"[Event] skipped {skip_num} files because of unfound hash.")
-    print(init_item_names)
     skip_num = 0
+
+def decodeWems():
+    for root, dirs, files in os.walk("output/rename"):
+        for file in files:
+            if file.endswith(".wem"):
+                path = root.replace("\\", "/") + "/" + file
+                short_path = path.replace("output/rename/", "").replace("wem", "wav")
+                if not os.path.exists(f"output/decode/{short_path}"):
+                    os.makedirs(os.path.dirname(f"output/decode/{short_path}"), exist_ok=True)
+                subprocess.run(
+                    ["./vgmstream/vgmstream-cli", path, "-o", f"output/decode/{short_path}"])
 
 
 
@@ -518,4 +527,6 @@ if __name__ == '__main__':
     # this program will delete the files in the `output/unpack` folder which are successfully renamed.
     # if you want to keep them, comment the line below.
     deleteCompletedFiles()
+    print("[Main] Start decoding wems...")
+    decodeWems()
     print("[Main] Done!")
