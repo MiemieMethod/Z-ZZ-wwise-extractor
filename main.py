@@ -125,7 +125,7 @@ def unpackWwiseBanks():
             package.addfile(open(f'input/Full/{i}/Patch.pck', 'rb'))
             package.addfile(open(f'input/Full/{i}/SoundBank_{i}_0.pck', 'rb'))
             package.addfile(open(f'input/Full/{i}/Streamed_{i}_0.pck', 'rb'))
-            for j in range(0, 15):
+            for j in range(0, 16):
                 package.addfile(open(f'input/Full/{i}/External_{i}_{j}.pck', 'rb'))
             # for j in range(0, 32):
             #     package.addfile(open(f'input/{i}/VoBanks{j}.pck', 'rb'))
@@ -517,7 +517,7 @@ if __name__ == '__main__':
     print("[Main] Start generating bank data...")
     generateBankData()
     print("[Main] Start loading bank xml...")
-    # loadBankXml()
+    loadBankXml()
     print("[Main] Start renaming external wems...")
     renameExtrenalWems()
     print("[Main] Start renaming event wems...")
