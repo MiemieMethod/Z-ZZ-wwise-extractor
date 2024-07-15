@@ -1,10 +1,8 @@
 import json
-import os
-
 import xmltodict
 import subprocess
 import shutil
-import re
+import os
 
 from wfp.FilePackager import *
 
@@ -263,7 +261,7 @@ def elegantRename(hash_path, voice_path, ext="wem", log_area="External"):
         os.remove(new_file_name)
     global completed_files
     if os.path.exists(old_file_name):
-        shutil.copy2(old_file_name, new_file_name)
+        shutil.copy(old_file_name, new_file_name)
         if old_file_name not in completed_files:
             completed_files.append(old_file_name)
     else:
@@ -293,17 +291,18 @@ def renameExtrenalWems():
     if not os.path.exists(f"output/rename"):
         os.makedirs(f"output/rename")
 
-    for i in ["Chinese(PRC)", "Chinese", "Cn"]:
-        with open("data/Data/AudioResourceData.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
-            for key in data["externals"]:
-                entry = data["externals"][key]
-                for j in ["wem", "ogg", "wav", "mp3"]:
-                    path = f"{i}/stream_NAP/{entry['prefix']}{key}"
-                    hash = fnv_hash_64(f"{path}.{j}")
-                    elegantRename(f"sfx/externals/{hash}", path, j)
-                # hash = fnv_hash_64(f"{entry['prefix']}{key}_{i}.wem")
-                # elegantRename(f"sfx/externals/{hash}", f"{i.lower()}/voice/{entry['prefix']}{key}")
+    with open("data/Data/AudioResourceData.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+        for key in data["externals"]:
+            entry = data["externals"][key]
+            for i in entry["languages"]:
+                path = f"{i}/Ex/{entry['prefix']}{key}"
+                hash = fnv_hash_64(f"{path}.wem")
+                if not os.path.exists(os.path.dirname(f"output/rename/{path}.wem")):
+                    os.makedirs(os.path.dirname(f"output/rename/{path}.wem"))
+                elegantRename(f"sfx/externals/{hash}", path)
+            # hash = fnv_hash_64(f"{entry['prefix']}{key}_{i}.wem")
+            # elegantRename(f"sfx/externals/{hash}", f"{i.lower()}/voice/{entry['prefix']}{key}")
 
     global skip_num
     print(f"[External] skipped {skip_num} files because of unfound hash.")
@@ -518,9 +517,9 @@ if __name__ == '__main__':
     print("[Main] Start generating bank data...")
     generateBankData()
     print("[Main] Start loading bank xml...")
-    loadBankXml()
-    # print("[Main] Start renaming external wems...")
-    # renameExtrenalWems()
+    # loadBankXml()
+    print("[Main] Start renaming external wems...")
+    renameExtrenalWems()
     print("[Main] Start renaming event wems...")
     renameEventWems()
     print("[Main] Start deleting completed files...")
